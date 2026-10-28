@@ -5,6 +5,7 @@ import express from "express";
 import cors from "cors";
 import path from "path";
 import { AppDataSource } from "./data-source";
+import { notFoundHandler, errorHandler } from "./middlewares/errorHandler";
 
 
 
@@ -20,8 +21,11 @@ app.get("/", (_req, res) => {
     res.json({ mensaje: "API de reservas funcionando" });
 });
 
+app.use(notFoundHandler);
+app.use(errorHandler);
 
 const PORT = Number(process.env.PORT) || 4000;
+
 AppDataSource.initialize()
 .then(() => {
     console.log("Base de datos conectada");

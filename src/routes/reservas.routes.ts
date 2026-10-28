@@ -2,12 +2,21 @@ import { Router } from "express";
 import { AppDataSource } from "../data-source";
 import { Reserva } from "../entities/Reserva";
 import { Mesa } from "../entities/Mesa";
-
+import { asyncHandler } from "../middlewares/asyncHandler";
+import { HttpError } from "../middlewares/errorHandler";
 
 const router = Router();
 const reservaRepo = AppDataSource.getRepository(Reserva);
 const mesaRepo = AppDataSource.getRepository(Mesa);
 
+// Convierte el id de la URL a número, o lanza un error 400
+function parseId(valor: string): number {
+  const id = Number(valor);
+  if (!Number.isInteger(id) || id <= 0) {
+    throw new HttpError(400, "El id debe ser un número entero positivo");
+  }
+  return id;
+}
 
 // Devuelve true si no se envió mesaId o si la mesa existe
 async function mesaValida(mesaId: unknown): Promise<boolean> {
@@ -15,86 +24,67 @@ async function mesaValida(mesaId: unknown): Promise<boolean> {
   return mesaRepo.existsBy({ id: Number(mesaId) });
 }
 
-
 // CREAR
-router.post("/", async (req, res) => {
-  try {
+router.post(
+  "/",
+  asyncHandler(async (req, res) => {
     if (!(await mesaValida(req.body.mesaId))) {
-      return res.status(400).json({ mensaje: "La mesa indicada no existe" });
+      throw new HttpError(400, "La mesa indicada no existe");
     }
     const nueva = reservaRepo.create(req.body as Partial<Reserva>);
     const guardada = await reservaRepo.save(nueva);
     res.status(201).json(guardada);
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ mensaje: "Error al crear la reserva" });
-  }
-});
-
+  })
+);
 
 // LISTAR
-router.get("/", async (_req, res) => {
-  try {
+router.get(
+  "/",
+  asyncHandler(async (_req, res) => {
     const reservas = await reservaRepo.find({ relations: { mesa: true }, order: { fecha: "ASC" } });
     res.json(reservas);
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ mensaje: "Error al listar las reservas" });
-  }
-});
-
+  })
+);
 
 // OBTENER UNA
-router.get("/:id", async (req, res) => {
-  try {
+router.get(
+  "/:id",
+  asyncHandler(async (req, res) => {
+    const id = parseId(req.params.id);
     const reserva = await reservaRepo.findOne({
-      where: { id: Number(req.params.id) },
+      where: { id },
       relations: { mesa: true },
     });
-    if (!reserva) {
-      return res.status(404).json({ mensaje: "Reserva no encontrada" });
-    }
+    if (!reserva) throw new HttpError(404, "Reserva no encontrada");
     res.json(reserva);
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ mensaje: "Error al obtener la reserva" });
-  }
-});
-
+  })
+);
 
 // ACTUALIZAR
-router.put("/:id", async (req, res) => {
-  try {
-    const reserva = await reservaRepo.findOneBy({ id: Number(req.params.id) });
-    if (!reserva) {
-      return res.status(404).json({ mensaje: "Reserva no encontrada" });
-    }
+router.put(
+  "/:id",
+  asyncHandler(async (req, res) => {
+    const id = parseId(req.params.id);
+    const reserva = await reservaRepo.findOneBy({ id });
+    if (!reserva) throw new HttpError(404, "Reserva no encontrada");
     if (!(await mesaValida(req.body.mesaId))) {
-      return res.status(400).json({ mensaje: "La mesa indicada no existe" });
+      throw new HttpError(400, "La mesa indicada no existe");
     }
     reservaRepo.merge(reserva, req.body as Partial<Reserva>);
     const actualizada = await reservaRepo.save(reserva);
     res.json(actualizada);
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ mensaje: "Error al actualizar la reserva" });
-  }
-});
-
+  })
+);
 
 // ELIMINAR
-router.delete("/:id", async (req, res) => {
-  try {
-    const resultado = await reservaRepo.delete(Number(req.params.id));
-    if (resultado.affected === 0) {
-      return res.status(404).json({ mensaje: "Reserva no encontrada" });
-    }
+router.delete(
+  "/:id",
+  asyncHandler(async (req, res) => {
+    const id = parseId(req.params.id);
+    const resultado = await reservaRepo.delete(id);
+    if (resultado.affected === 0) throw new HttpError(404, "Reserva no encontrada");
     res.status(204).send();
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ mensaje: "Error al eliminar la reserva" });
-  }
-});
-
+  })
+);
 
 export default router;
